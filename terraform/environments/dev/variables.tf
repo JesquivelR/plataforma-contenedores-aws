@@ -10,7 +10,7 @@ variable "aws_region" {
   default     = "us-west-1"
 }
 
-variable "repositorio_ecr"{
+variable "repositorio_ecr" {
   description = "Repositorio ECR"
   type        = string
 }

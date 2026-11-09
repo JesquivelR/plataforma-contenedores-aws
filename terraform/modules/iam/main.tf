@@ -21,8 +21,8 @@ resource "aws_iam_role_policy_attachment" "ecs_execution_policy" {
 }
 
 resource "aws_iam_role_policy" "ecs_execution_policy_inline" {
-  name   = "${var.environment}-ecs-execution-policy-inline"
-  role   = aws_iam_role.ecs_execution.id
+  name = "${var.environment}-ecs-execution-policy-inline"
+  role = aws_iam_role.ecs_execution.id
   policy = jsonencode({
     Version = "2012-10-17"
     Statement = [

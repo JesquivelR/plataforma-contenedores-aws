@@ -13,10 +13,10 @@ resource "aws_lb" "this" {
 }
 
 resource "aws_lb_target_group" "app1" {
-  name     = "${var.environment}-${var.app1_image}-tg"
-  port     = 8000
-  protocol = "HTTP"
-  vpc_id   = var.vpc_id
+  name        = "${var.environment}-${var.app1_image}-tg"
+  port        = 8000
+  protocol    = "HTTP"
+  vpc_id      = var.vpc_id
   target_type = "ip"
 
   health_check {
@@ -45,10 +45,10 @@ resource "aws_lb_listener" "http-app1" {
 }
 
 resource "aws_lb_target_group" "app2" {
-  name     = "${var.environment}-${var.app2_image}-tg"
-  port     = 8000
-  protocol = "HTTP"
-  vpc_id   = var.vpc_id
+  name        = "${var.environment}-${var.app2_image}-tg"
+  port        = 8000
+  protocol    = "HTTP"
+  vpc_id      = var.vpc_id
   target_type = "ip"
 
   health_check {

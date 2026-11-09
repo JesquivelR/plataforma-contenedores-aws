@@ -8,7 +8,7 @@ variable "aws_region" {
   type        = string
 }
 
-variable "repositorio_ecr"{
+variable "repositorio_ecr" {
   description = "Repositorio ECR"
   type        = string
 }

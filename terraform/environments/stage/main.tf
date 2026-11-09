@@ -95,17 +95,17 @@ resource "aws_security_group" "ecs_sg" {
 }
 
 module "updatedeploy" {
-  source         = "../../modules/updatedeploy"
-  environment    = var.environment
-  ecs_cluster    = module.ecs.ecs_cluster_id
-  aws_region     = var.aws_region
-  repositorio_ecr       = var.repositorio_ecr
-  app1_image            = var.app1_image
-  app2_image            = var.app2_image
-  image_tag             = var.image_tag
-  execution_role_arn    = module.iam.ecs_execution_role_arn
-  task_role_arn         = module.iam.ecs_task_role_arn
-  services_json  = jsonencode({
+  source             = "../../modules/updatedeploy"
+  environment        = var.environment
+  ecs_cluster        = module.ecs.ecs_cluster_id
+  aws_region         = var.aws_region
+  repositorio_ecr    = var.repositorio_ecr
+  app1_image         = var.app1_image
+  app2_image         = var.app2_image
+  image_tag          = var.image_tag
+  execution_role_arn = module.iam.ecs_execution_role_arn
+  task_role_arn      = module.iam.ecs_task_role_arn
+  services_json = jsonencode({
     "app1" = var.app1_image,
     "app2" = var.app2_image
   })

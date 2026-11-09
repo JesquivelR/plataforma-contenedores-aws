@@ -1,10 +1,10 @@
 resource "aws_iam_role" "lambda_role" {
-  name               = "lambda-role-${var.environment}"
+  name = "lambda-role-${var.environment}"
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
     Statement = [
       {
-        Effect    = "Allow"
+        Effect = "Allow"
         Principal = {
           Service = "lambda.amazonaws.com"
         }
@@ -26,7 +26,7 @@ resource "aws_iam_role_policy_attachment" "lambda_policy_attachment" {
 resource "aws_iam_policy" "ecs_permissions" {
   name        = "ecs-permissions-${var.environment}"
   description = "Permisos necesarios para la función Lambda que actualiza ECS."
-  policy      = jsonencode({
+  policy = jsonencode({
     Version = "2012-10-17",
     Statement = [
       {
@@ -84,13 +84,13 @@ resource "aws_cloudwatch_event_rule" "ecr_push_rule" {
   name        = "ecr-push-rule-${var.environment}"
   description = "Trigger Lambda on ECR image push"
   event_pattern = jsonencode({
-    "source": ["aws.ecr"],
-    "detail-type": ["ECR Image Action"],
-    "detail": {
-      "action-type": ["PUSH"],
-      "result": ["SUCCESS"],
-      "repository-name": ["${var.app1_image}", "${var.app2_image}"],
-      "image-tag": ["${var.image_tag}"]
+    "source" : ["aws.ecr"],
+    "detail-type" : ["ECR Image Action"],
+    "detail" : {
+      "action-type" : ["PUSH"],
+      "result" : ["SUCCESS"],
+      "repository-name" : ["${var.app1_image}", "${var.app2_image}"],
+      "image-tag" : ["${var.image_tag}"]
     }
   })
 }
