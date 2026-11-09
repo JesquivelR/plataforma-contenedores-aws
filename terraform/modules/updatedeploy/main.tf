@@ -89,8 +89,8 @@ resource "aws_cloudwatch_event_rule" "ecr_push_rule" {
     "detail" : {
       "action-type" : ["PUSH"],
       "result" : ["SUCCESS"],
-      "repository-name" : ["${var.app1_image}", "${var.app2_image}"],
-      "image-tag" : ["${var.image_tag}"]
+      "repository-name" : [var.app1_image, var.app2_image],
+      "image-tag" : [var.image_tag]
     }
   })
 }
@@ -109,5 +109,3 @@ resource "aws_lambda_permission" "allow_eventbridge" {
   principal     = "events.amazonaws.com"
   source_arn    = aws_cloudwatch_event_rule.ecr_push_rule.arn
 }
-
-data "aws_caller_identity" "current" {}

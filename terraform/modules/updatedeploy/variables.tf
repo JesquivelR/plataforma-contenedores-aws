@@ -3,11 +3,6 @@ variable "environment" {
   type        = string
 }
 
-variable "aws_region" {
-  description = "Región de AWS"
-  type        = string
-}
-
 variable "ecs_cluster" {
   description = "ID del clúster ECS"
   type        = string
@@ -33,11 +28,6 @@ variable "image_tag" {
   type        = string
 }
 
-variable "services_json" {
-  description = "Servicios a actualizar con sus imágenes Docker"
-  type        = string
-}
-
 variable "execution_role_arn" {
   description = "ARN del rol de ejecución de ECS"
   type        = string
@@ -47,4 +37,3 @@ variable "task_role_arn" {
   description = "ARN del rol de tarea de ECS"
   type        = string
 }
-
