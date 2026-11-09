@@ -794,7 +794,7 @@ Este archivo define los recursos necesarios para implementar una función Lambda
 - **Configuración Clave:**
   - **Nombre:** `update-deploy-${var.environment}`.
   - **Rol Asociado:** `lambda-role-${var.environment}`.
-  - **Código Fuente:** `lambda.zip` ubicado en el directorio del módulo.
+  - **Código Fuente:** `lambda.zip` generado en cada `plan` con el data source `archive_file` a partir de `lambda_function.py` (el zip no se versiona).
   - **Variables de Entorno:**
     - `ECS_CLUSTER`
     - `ENVIRONMENT`

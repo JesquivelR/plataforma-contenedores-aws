@@ -50,14 +50,20 @@ resource "aws_iam_role_policy_attachment" "ecs_policy_attachment" {
   policy_arn = aws_iam_policy.ecs_permissions.arn
 }
 
+data "archive_file" "lambda" {
+  type        = "zip"
+  source_file = "${path.module}/lambda_function.py"
+  output_path = "${path.module}/lambda.zip"
+}
+
 resource "aws_lambda_function" "update_deploy_lambda" {
   function_name = "update-deploy-${var.environment}"
   role          = aws_iam_role.lambda_role.arn
   handler       = "lambda_function.lambda_handler"
   runtime       = "python3.9"
 
-  filename         = "${path.module}/lambda.zip"
-  source_code_hash = filebase64sha256("${path.module}/lambda.zip")
+  filename         = data.archive_file.lambda.output_path
+  source_code_hash = data.archive_file.lambda.output_base64sha256
 
   environment {
     variables = {
