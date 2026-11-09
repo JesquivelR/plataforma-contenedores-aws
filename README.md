@@ -1,243 +1,146 @@
-# 🛠️ Resolución del Reto Técnico
+# Plataforma de contenedores en AWS
 
-## 📋 Descripción del Proyecto
+## Objetivo
 
-Diseñar y desplegar una infraestructura escalable, segura y de alta disponibilidad en AWS que soporte aplicaciones modernas basadas en contenedores, utilizando servicios como ECS Fargate, NAT Gateway y Application Load Balancer (ALB), Lambda y EventBridge.
+Infraestructura como código para desplegar aplicaciones en contenedores sobre AWS con alta disponibilidad: dos servicios en ECS Fargate detrás de un Application Load Balancer, red con subredes públicas y privadas, y una función Lambda que actualiza los servicios cuando se publica una imagen nueva en ECR. Todo se define con Terraform y se despliega desde GitHub Actions, que se autentica en AWS con OIDC y no guarda llaves de acceso.
 
----
+## Arquitectura
 
-## 🔧 Tecnologías Usadas
-1. **Terraform:** Herramienta IaC para definir y desplegar infraestructura.
-2. **AWS:**
-    - ``IAM``: Servicio de gestión de identidades y acceso en AWS para controlar el acceso a recursos.
-    
-    - ``S3``: Servicio de almacenamiento de objetos altamente escalable y duradero.
-    
-    - ``DynamoDB``: Base de datos NoSQL totalmente gestionada, rápida y flexible.
-    
-    - ``ECR``: Registro de contenedores para almacenar, administrar y desplegar imágenes Docker.
-    
-    - ``ECS``: Servicio de contenedores de Amazon para ejecutar aplicaciones en contenedores en AWS.
-    
-    - ``CloudWatch``: Servicio de monitoreo que proporciona métricas y logs de recursos en AWS.
-    
-    - ``Fargate``: Motor de computación sin servidor para ejecutar contenedores en ECS y EKS sin gestionar servidores.
-    
-    - ``Security Groups``: Conjunto de reglas de firewall para controlar el tráfico de red hacia las instancias de AWS.
-    
-    - ``ALB``: Balanceador de carga de aplicaciones para distribuir tráfico a aplicaciones dentro de AWS.
+![Arquitectura](./images/Arquitectura_Propuesta.jpg)
 
-    - ``EventBridge``: Programador sin servidor que facilita la creación, ejecución y administración de tareas programadas a escala..
+Flujo general:
 
-    - ``Lambda``: Ejecuta código en respuesta a eventos y administra los recursos informáticos.
+1. El workflow `Build and Push to ECR` construye las imágenes de `app1` y `app2` y las publica en ECR.
+2. EventBridge detecta el push a ECR e invoca una función Lambda.
+3. La Lambda actualiza los servicios de ECS para que usen la imagen nueva.
+4. El ALB, ubicado en subredes públicas, reparte el tráfico HTTP hacia las tareas Fargate que corren en subredes privadas.
+5. Las tareas salen a Internet únicamente a través del NAT Gateway.
 
-3. **GitHub Actions:** Plataforma de integración y despliegue continuos (CI/CD) que permite automatizar el desarrollo de software.
+Las decisiones de diseño están en [design.md](./design.md).
 
-4. **Docker:** Plataforma para desarrollar, enviar y ejecutar aplicaciones en contenedores, garantizando consistencia y portabilidad.
+## Componentes
 
----
+| Componente | Descripción |
+|---|---|
+| VPC | Red con subredes públicas y privadas en dos zonas de disponibilidad, Internet Gateway y NAT Gateway |
+| ALB | Balanceador de aplicaciones con grupos de destino y reglas por ruta hacia cada servicio |
+| ECS Fargate | Clúster, definiciones de tarea y servicios de `app1` y `app2` |
+| ECR | Repositorios de imágenes de ambas aplicaciones |
+| Lambda y EventBridge | Actualizan los servicios de ECS cuando llega una imagen nueva |
+| IAM | Roles de ejecución y de tarea de ECS, rol de la Lambda y rol OIDC para GitHub Actions |
+| S3 y DynamoDB | Estado remoto de Terraform y bloqueo |
 
-## 📋 Estructura del Proyecto
+## Estructura del repositorio
 
-### 1. Arbol de directorios
-
-```bash
+```text
 .
-└── <Root>
-    ├── app1
-    │   ├── Dockerfile
-    │   ├── main.py
-    │   └── requirements.txt
-    ├── app2
-    │   ├── Dockerfile
-    │   ├── main.py
-    │   └── requirements.txt
-    └── terraform
-        ├── environments
-        │   ├── dev
-        │   │   ├── backend.tf
-        │   │   ├── main.tf
-        │   │   ├── outputs.tf
-        │   │   └── variables.tf
-        │   └── stage
-        │       ├── backend.tf
-        │       ├── main.tf
-        │       ├── outputs.tf
-        │       └── variables.tf
-        ├── global
-        │   ├── providers.tf
-        │   └── variables.tf
-        └── modules
-            ├── alb
-            │   ├── main.tf
-            │   ├── outputs.tf
-            │   └── variables.tf
-            ├── ecs
-            │   ├── main.tf
-            │   ├── outputs.tf
-            │   └── variables.tf
-            ├── iam
-            │   ├── ecs_task_policy.json
-            │   ├── main.tf
-            │   ├── outputs.tf
-            │   └── variables.tf
-            ├── updatedeploy
-            │   ├── lambda_function.py
-            │   ├── lambda.zip
-            │   ├── main.tf
-            │   ├── outputs.tf
-            │   └── variables.tf
-            └── vpc
-                ├── main.tf
-                ├── outputs.tf
-                └── variables.tf
+├── app1/                  Aplicación 1 (Dockerfile, main.py, requirements.txt)
+├── app2/                  Aplicación 2
+├── images/                Capturas y diagrama
+├── design.md              Decisiones de diseño
+├── .github/workflows/     CI de Terraform, build de imágenes y despliegues
+└── terraform/
+    ├── global/            Proveedor OIDC de GitHub y rol IAM de los workflows
+    ├── environments/      Entornos dev y stage
+    └── modules/           vpc, alb, ecs, iam y updatedeploy
 ```
 
-### 2. Descripción de directorios
+## Autenticación de CI/CD con OIDC
 
-Se tiene la siguiente distribución de archivos y carpetas:
-- **app1**: Contiene los archivos necesarios para la contenerización de la aplicación ``APP1`` propocionada en un repositorio de GitHub.
-  - Repositorio Proporcionado APP1: ``https://github.com/G97-TECH-MKT/simple-app1``
-  - Repositorio Proporcionado APP2: ``https://github.com/G97-TECH-MKT/simple-app2``
-- **app2**: Contiene los archivos necesarios para la contenerización de la aplicación ``APP2`` propocionada en un repositorio de GitHub.
-- **Terraform**: Contiene los módulos que serán utilizados para poder desplegar la infraestructura.
-    - **environments**: Contiene los ambientes para los cuales se desplegará la infraestructura
+Los workflows no usan `AWS_ACCESS_KEY_ID` ni `AWS_SECRET_ACCESS_KEY`. Cada ejecución pide un token a GitHub (`permissions: id-token: write`) y AWS lo cambia por credenciales temporales con `AssumeRoleWithWebIdentity`.
+
+```text
+GitHub Actions --token OIDC--> AWS STS --valida trust policy--> credenciales temporales --> rol IAM
+```
+
+La trust policy, definida en `terraform/global/oidc.tf`, exige que:
+
+- `aud` sea `sts.amazonaws.com`;
+- `sub` sea `repo:JesquivelR/plataforma-contenedores-aws:ref:refs/heads/main` o uno de los entornos declarados (`dev`, `stage`).
+
+Cualquier otro repositorio o rama no puede asumir el rol. Si cambias el nombre del repositorio o la rama, ajusta las variables `github_owner`, `github_repo` y `github_branch`.
+
+El pipeline `CI de Terraform` corre en cada PR con `terraform fmt -check`, `validate`, tflint y Checkov, sin credenciales de AWS.
+
+## Requisitos
+
+- Cuenta de AWS con permisos para crear los recursos anteriores.
+- Terraform 1.10 o superior y AWS CLI configurado para el paso inicial.
+- Cuenta de GitHub y git.
+
+## Despliegue
+
+1. **Clonar el repositorio**
+
+   ```bash
+   git clone https://github.com/JesquivelR/plataforma-contenedores-aws.git
+   cd plataforma-contenedores-aws
+   ```
+
+2. **Crear el proveedor OIDC y el rol (una sola vez, desde tu equipo)**
+
+   Este paso necesita credenciales propias porque el rol todavía no existe.
+
+   ```bash
+   cd terraform/global
+   terraform init
+   terraform apply
+   terraform output github_actions_role_arn
+   ```
+
+   Si tu cuenta ya tiene el proveedor OIDC de GitHub, impórtalo antes de aplicar o ajusta `oidc.tf`, porque AWS permite uno solo por URL.
+
+3. **Configurar los secretos del repositorio** en `Settings > Secrets and variables > Actions`:
+
+   | Secreto | Valor |
+   |---|---|
+   | `AWS_ROLE_ARN` | Salida `github_actions_role_arn` del paso anterior |
+   | `AWS_REGION` | `us-west-1` |
+   | `TF_S3_BUCKET` | Nombre del bucket de estado, único a nivel global |
+   | `TF_S3_KEY` | `infra.tfstate` |
+   | `TF_DYNAMODB_TABLE` | `terraform-lock-table` |
+   | `ECR_REGISTRY` | URI del registro de ECR, disponible después del primer workflow |
+
+4. **Ejecutar los workflows en este orden** (`Actions > workflow > Run workflow`):
+
+   1. `Crear Infraestructura Previa`: crea el bucket de estado, la tabla de bloqueo y los repositorios de ECR. Se ejecuta una vez. Luego configura `ECR_REGISTRY`.
+   2. `Build and Push to ECR`: construye y publica las imágenes. Puede repetirse cada vez que cambie el código de las aplicaciones.
+   3. `Despliegue o Destrucción de Infraestructura - Dev` (o `Stage`): despliega la red, el ALB, ECS y la Lambda.
+
+   ![Workflows disponibles](./images/View_workflows.png)
+
+5. **Probar**
+
+   Al terminar el despliegue, obtén el DNS del ALB en la consola de EC2, en `Balanceadores de carga`, o con `terraform output`. El ALB escucha en HTTP:
+
+   ```bash
+   curl http://<dns-del-alb>
+   ```
+
+   ![Respuesta de la aplicación](./images/Response2.png)
+
+   Para ver un cambio, modifica [app1/main.py](./app1/main.py), vuelve a ejecutar `Build and Push to ECR` y consulta de nuevo la URL.
+
+## Costos aproximados
+
+Referencia para `us-west-1`, con el entorno encendido de forma continua. Los precios cambian: verifica en la calculadora de AWS.
+
+| Recurso | Aproximado mensual |
+|---|---|
+| NAT Gateway | 35 a 40 USD más datos procesados |
+| Application Load Balancer | 18 a 20 USD más LCU |
+| Fargate (dos servicios pequeños) | 15 a 30 USD según tamaño y réplicas |
+| ECR, S3, DynamoDB, Lambda, EventBridge | menos de 5 USD con poco uso |
+
+El NAT Gateway y el ALB son la mayor parte del gasto. Destruye el entorno cuando no lo uses.
+
+## Limpieza
+
+Para eliminar la infraestructura, cambia `DESTROY_INFRA` a `True` en [deploy-IaC-dev.yml](.github/workflows/deploy-IaC-dev.yml), haz push y ejecuta el workflow de despliegue de dev. Después, elimina desde `terraform/global` el rol OIDC con `terraform destroy` si ya no lo necesitas, y vacía y borra manualmente el bucket de estado, la tabla de DynamoDB y los repositorios de ECR.
+
 ---
 
-## 🚀 Ejecución del Proyecto
-
-### ⚙️ Requisitos Previos
-1. Tener habilitado lo siguiente:
-   - Tener una cuenta de GitHub.
-   - Consola con git instalado para ingresar comandos.
-
-2. Realizar un Fork a este repositorio:
-    - Se deberá hacer clic en la sección que se llama ``Fork``.
-  ![Fork](./images/Fork.png)
-    - Seguir los pasos para realizar la operación de Fork.
-      - Colocar una descripción
-      - Quitarle el aspa a "Copy the ``Dev`` branch only"
-  ![Fork](./images/Fork1.png)
-    - Se creará un repositorio en nuestra cuenta con el nombre del repositorio del cual hicimos fork.
-
-3. Clonar el repositorio:
-   ```bash
-   git clone https://github.com/<Tu_cuenta>/retoTecnico.git
-   cd retoTecnico
-   ```
-### 💡 Explicación de los flujos
-1. **Crear infraestructura previa**:
-    - Para este paso debemos ejecutar el flujo ``Crear Infraestructura Previa``, este flujo nos permitirá crear los siguientes componentes:
-        - **Bucket de S3**: Nos servirá para almacenar el archivo ``tfstate``.
-        - **Tabla en DynamoDB**: Nos servirá para gestionar el estado de la infraestructura gestionada por Terraform.
-        - **Repositorios en ECR**: Nos permitirá alojar la ``APP1`` y ``APP2`` para luego desplegarlas.
-    - **``Este paso tiene como finalidad ejecutarse una sola vez.``**
-2. **Dockerizar apps y subirlas al repositorio**:
-    - Para este paso debemos ejecutar el flujo ``Build and Push to ECR``, este flujo nos permitirá contenerizar y publicar las imagenes de la APP1 y APP2 las veces que deseemos para que en pasos posteriores puedan ser desplegadas.
-    - Este paso tiene como finlidad ejecutarse multiples veces.
-
-3. **Desplegar infraestructura**:
-    - Para este paso debemos ejecutar el flujo ``Despliegue o Destrucción de Infraestructura``, este flujo nos permitirá desplegar la infraestructura necesaria para poder ejecutar la imagen previamente publicada en el respectivo repositorio en el paso anterior.
-    - Este paso tiene como finlidad ejecutarse multiples veces, ya sea para **desplegar** la infraestructura o **destruirla**.
-    
-
-### 🏃 Pasos para la Ejecución
-1. **Configurar secretos**:
-    - Debemos crear los respectivos secrets de nuestro proyecto, para lo cual nos dirigimos a ``Settings > Secrets and variables > Actions`` y dar clic en ``New Repository Secret``.
-    ![Steps_secrets](./images/Steps_secrets.png)
-    - Los secrets que debemos configurar son los siguientes:
-        - **AWS_ACCESS_KEY_ID**: *Access key de tu cuenta de aws*
-        - **AWS_REGION**: <ins>us-west-1</ins>
-        - **AWS_SECRET_ACCESS_KEY**: *Secret key de tu cuenta de aws* 
-        - **ECR_REGISTRY**: *Esta variable la podemos obtener luego de ejecutar el flujo*
-        - **TF_DYNAMODB_TABLE**: <ins>terraform-lock-table</ins>
-        - **TF_S3_BUCKET**: *El nombre del bucket debe ser único a nivel global en AWS. Si eliges un nombre ya existente, la creación del bucket fallará. Asegúrate de usar una convención de nombres que garantice unicidad, como incluir identificadores específicos de tu proyecto u organización.*
-        - **TF_S3_KEY**: <ins>infra.tfstate</ins>
-    - Los unicos valores que te pido que deben mantenerse son los de ``AWS_REGION`` ``TF_DYNAMODB_TABLE`` ``TF_S3_KEY`` los demás pueden variar dependiendo de la cuenta de **AWS** que uses.
-
-    ![Steps_secrets](./images/Secrets.png)
-
-    Como te comenté arriba, la variable ``ECR_REGISTRY`` la generaremos luego de ejecutar el primer workflow.
-
-2. **Ubicarnos en Actions**:
-    - Procedemos a activar la sección ``Actions``.
-    - Nos dirigimos a ``Actions`` y damos clic en el boton verde cuyo nombre es ``I understand my workflows, go ahead and enable them``.
-
-    ![activarWorkflow](./images/ActivarWorkflow.png)
-  
-    - Debemos dirigirnos a ``Actions `` y ahí podremos visualizar los flujos que tenemos disponibles:
-
-    ![view_workflows](./images/View_workflows.png)
-
-    - Los flujos que tenemos son los siguiente:
-            
-        1. Crear Infraestructura Previa
-        2. Build and Push to ECR
-        3. Despliegue o Destrucción de Infraestructura - Dev
-        4. Despliegue o Destrucción de Infraestructura - Stage
-    - Estos flujos se deben ejecutar en el mismo orden que están enumerados, cada vez que demos clic en alguno podemos visualizar un botón con el nombre ``Run workflow`` el cual al darle clic nos pedirá que seleccionemos la rama deseada.
-    - Con respecto a las ramas:
-        - La rama ``main``: Contiene todo el proyecto
-        - La rama ``dev``: Contiene todo el proyecto y es la rama en la cual se deben hacer cambios en las apps
-        - La rama ``deploy_iac``: Contiene todo el proyecto y es la rama que despliega toda la infraestructura para realizar el despliegue.
-3. **Desplegar infraestructura previa**:
-- Una vez configuradas las variables y ubicados los workflows debemos ejecutar el primer flujo para crear los componentes necesarios para que nuestro proyecto funcione.
-- Debemos dar clic en ``Actions > Crear Infraestructura Previa > Run workflow > Branch:main`` y dar clic en ``Run Workflow``.
-![infra_previa](./images/Infra_previa.png)
-- Esto creará los componentes necesarios en **S3**, **DynamoDB** y **ECR**.
-- Actualizamos la pagina para ver el proceso.
-![infra_previa](./images/Proc_crear_infra_previa.png)
-- Una vez culminado se verá de la siguiente manera:
-![alt text](./images/Success_crear_infra_previa.png)
-- Si deseamos podemos ingresar para revisar los logs.
-- Este workflow nos permitió crear los componentes indicados:
-![alt text](./images/Resultado_preinfra.png)
-- Recuerda que los Repositorios de ECR y la Tabla de DynamoDB se encuentran en la región que especificamos en las wariables, en este caso ``us-west-1``.
-- Con los repositorios de ECR creados ahora si podemos configurar nuestro ultimo secreto  en ``Settings > Secrets and variables > Actions``, recuerda que el secreto que nos faltaba era ``ECR_REGISTRY``.
-![new_secret](./images/New_secret.png)
-- El valor de ``ECR_REGISTRY`` lo puedes encontrar en **AWS ECR**, en los repositorios que se crearon con el workflow, es la cadena de números que termina en **amazonaws.com**.
-![uri](./images/Uri.png)
-- Finalmente tenemos todos los secrets necesarios para nuestro proyecto:
-![secrets1](./images/Secrets1.png)
-
-4. **Dockerizar apps y subirlas al repositorio**:
-- Debemos dar clic en ``Actions > Build and Push to ECR > Run workflow > Branch:dev`` y dar clic en Run Workflow.
-![buildandpush](./images/Buildandpush.png)
-- Esperemos a que termine el workflow
-![statusbuildandpush](./images/Status_buildandpush.png)
-- Este workflow se encargará de contenerizar y subir las aplicaciones que nos proporcionaron en los remositorios mencionados al principio a los repositorios creados:
-![imagerepo](./images/Imagerepo.png)
-- Este flujo se puede ejecutar las veces que deseemos subiendo cambios nuevos de las apps, está configurado para siempre tener una imagen Latest y mantener las versiones anteriores.
-
-5. **Desplegar infraestructura**:
-- Debemos dar clic en ``Actions > Crear Infraestructura Previa - Dev > Run workflow > Branch:deploy_iac`` y dar clic en Run Workflow.
-![deployInfra](./images/Despliegue_infra.png)
-- Una vez ejecutado podemos ingresar al workflow para revisar el proceso:
-![deployInfra2](./images/Despliegue_infra2.png)
-- Una vez finalizado podemos observar que nos proporciona el DNS del Application load Balancer.
-![deployInfra1](./images/Despliegue_infra1.png)
-- Por razones de seguridad Github oculta estos datos por los cual debemos buscar este valor en la consola de AWS.
-- Debemos dirigirnos al servicio ``EC2`` en AWS y luego ubicarnos en ``Balanceadores de carga``, ahí podremos extraer el ``DNS``.
-![ALB](./images/ALB.png)
-- Ahora podemos consultar esa URL en un navegador, debido a la falta de tiempo no pude configurar ``CloudFront`` y ``Certificate Manager`` para poder acceder de forma segura, por lo tanto tendremos que ingresar via **HTTP**.
-- Podemos consultar la URL via curl desde la terminal.
-    ```bash
-    curl dev-alb-1797972737.us-west-1.elb.amazonaws.com
-    ```
-- Tambien podemos consultar desde el navegador web usando ``HTTP``.
-![Response](./images/Response.png)
-
-- Deberíamos obtener lo siguiente:
-![Response1](./images/Response2.png)
-
-- De esta manera finalizamos la prueba.
-- Recuerda que puedes ejecutar las veces que quieras el workflow ```Build and Push to ECR``` cambiando previamente el contenido del archivo [main](./app1/main.py) para que puedas notar los cambios.
-![Evidencia](./images/Evidencia.png)
-
-6. **Eliminar infraestructura**:
-- Para poder eliminar la infraestructura basatará con modificar la variable de entorno ``DESTROY_INFRA: False`` a ``True`` del archivo [deploy-IaC-dev.yaml](.github/workflows/deploy-IaC-dev.yml), luego se deberá realizar PUSH al repositorio y seguidamente ejecutar el workflow  ``Despliegue o Destrucción de Infraestructura - Dev``.
-
-# 📋 Documentación de configuración en Terraform
+# Documentación de configuración en Terraform
 
 # Documentación del Archivo `main.tf` - Configuración de VPC
 
@@ -749,7 +652,7 @@ Este script de Terraform realiza las siguientes configuraciones principales:
 
 ---
 
-# 📋 Documentación del Archivo `main.tf` - Actualización de Despliegues con Lambda y ECS
+# Documentación del Archivo `main.tf` - Actualización de Despliegues con Lambda y ECS
 
 Este archivo define los recursos necesarios para implementar una función Lambda que actualiza servicios ECS al recibir eventos de push en ECR. Está diseñado para ser escalable, eficiente y automatizado.
 
@@ -850,8 +753,4 @@ Este archivo implementa:
 
 Esta configuración automatiza los despliegues en ECS, asegurando un flujo continuo desde la construcción de imágenes en ECR hasta la actualización de servicios en ECS.
 
-**De esta manera finalizamos el desarrollo del reto técnico.**
 
-## Authors
-
-- [@JesquivelR](https://www.github.com/JesquivelR)
