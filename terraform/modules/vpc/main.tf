@@ -1,4 +1,5 @@
 resource "aws_vpc" "this" {
+  #checkov:skip=CKV2_AWS_11:Los flow logs se dejan fuera del laboratorio por costo; en un entorno real van a CloudWatch Logs o S3.
   cidr_block = var.cidr
   tags = {
     Name = "${var.environment}-vpc"
@@ -10,7 +11,7 @@ resource "aws_subnet" "public" {
   vpc_id                  = aws_vpc.this.id
   cidr_block              = var.public_subnets[count.index]
   availability_zone       = element(var.availability_zones, count.index)
-  map_public_ip_on_launch = true
+  map_public_ip_on_launch = false
 
   tags = {
     Name = "${var.environment}-public-subnet-${count.index + 1}"
@@ -66,6 +67,7 @@ resource "aws_nat_gateway" "this" {
 }
 
 resource "aws_eip" "nat" {
+  #checkov:skip=CKV2_AWS_19:La IP elástica está asociada al NAT Gateway, no a una instancia EC2.
   tags = {
     Name = "${var.environment}-nat-eip"
   }
@@ -91,4 +93,13 @@ resource "aws_route_table_association" "private" {
   count          = length(aws_subnet.private)
   subnet_id      = aws_subnet.private[count.index].id
   route_table_id = aws_route_table.private.id
+}
+
+# Deja el security group por defecto de la VPC sin reglas para que nada lo use por accidente.
+resource "aws_default_security_group" "this" {
+  vpc_id = aws_vpc.this.id
+
+  tags = {
+    Name = "default-sin-reglas"
+  }
 }
