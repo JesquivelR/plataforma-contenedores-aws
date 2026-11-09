@@ -1,10 +1,10 @@
 resource "aws_iam_role" "lambda_role" {
-  name               = "lambda-role-${var.environment}"
+  name = "lambda-role-${var.environment}"
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
     Statement = [
       {
-        Effect    = "Allow"
+        Effect = "Allow"
         Principal = {
           Service = "lambda.amazonaws.com"
         }
@@ -26,23 +26,53 @@ resource "aws_iam_role_policy_attachment" "lambda_policy_attachment" {
 resource "aws_iam_policy" "ecs_permissions" {
   name        = "ecs-permissions-${var.environment}"
   description = "Permisos necesarios para la función Lambda que actualiza ECS."
-  policy      = jsonencode({
+  policy = jsonencode({
     Version = "2012-10-17",
     Statement = [
       {
-        Effect = "Allow",
-        Action = [
-          "ecs:RegisterTaskDefinition",
-          "ecs:UpdateService",
-          "ecs:DescribeServices",
-          "ecs:DescribeClusters",
-          "ecs:ListServices",
-          "iam:PassRole"
-        ],
+        Sid      = "LeerYActualizarServiciosDelCluster"
+        Effect   = "Allow",
+        Action   = ["ecs:UpdateService", "ecs:DescribeServices"],
+        Resource = ["${replace(var.ecs_cluster, ":cluster/", ":service/")}/*"]
+      },
+      {
+        Sid      = "LeerElCluster"
+        Effect   = "Allow",
+        Action   = ["ecs:DescribeClusters"],
+        Resource = [var.ecs_cluster]
+      },
+      {
+        Sid      = "ListarServiciosDelCluster"
+        Effect   = "Allow",
+        Action   = ["ecs:ListServices"],
+        Resource = ["*"],
+        Condition = {
+          ArnEquals = { "ecs:cluster" = var.ecs_cluster }
+        }
+      },
+      {
+        # RegisterTaskDefinition no admite permisos a nivel de recurso.
+        Sid      = "RegistrarTaskDefinitions"
+        Effect   = "Allow",
+        Action   = ["ecs:RegisterTaskDefinition"],
         Resource = ["*"]
+      },
+      {
+        Sid      = "PasarSoloLosRolesDeLasTareas"
+        Effect   = "Allow",
+        Action   = ["iam:PassRole"],
+        Resource = [var.execution_role_arn, var.task_role_arn],
+        Condition = {
+          StringEquals = { "iam:PassedToService" = "ecs-tasks.amazonaws.com" }
+        }
       }
     ]
   })
+}
+
+resource "aws_iam_role_policy_attachment" "xray_policy_attachment" {
+  role       = aws_iam_role.lambda_role.name
+  policy_arn = "arn:aws:iam::aws:policy/AWSXRayDaemonWriteAccess"
 }
 
 resource "aws_iam_role_policy_attachment" "ecs_policy_attachment" {
@@ -50,14 +80,30 @@ resource "aws_iam_role_policy_attachment" "ecs_policy_attachment" {
   policy_arn = aws_iam_policy.ecs_permissions.arn
 }
 
+data "archive_file" "lambda" {
+  type        = "zip"
+  source_file = "${path.module}/lambda_function.py"
+  output_path = "${path.module}/lambda.zip"
+}
+
 resource "aws_lambda_function" "update_deploy_lambda" {
+  #checkov:skip=CKV_AWS_116:EventBridge reintenta la invocación; una DLQ en SQS queda fuera del alcance del laboratorio.
+  #checkov:skip=CKV_AWS_117:La función solo llama a la API de ECS; ponerla en la VPC exigiría endpoints o NAT sin mejorar el aislamiento.
+  #checkov:skip=CKV_AWS_173:Las variables de entorno no contienen secretos, solo nombres y ARN; se cifran con la llave administrada por AWS.
+  #checkov:skip=CKV_AWS_272:El código se despliega desde este repositorio con Terraform; la firma de código con AWS Signer queda fuera del laboratorio.
   function_name = "update-deploy-${var.environment}"
   role          = aws_iam_role.lambda_role.arn
   handler       = "lambda_function.lambda_handler"
-  runtime       = "python3.9"
+  runtime       = "python3.12"
 
-  filename         = "${path.module}/lambda.zip"
-  source_code_hash = filebase64sha256("${path.module}/lambda.zip")
+  filename         = data.archive_file.lambda.output_path
+  source_code_hash = data.archive_file.lambda.output_base64sha256
+
+  reserved_concurrent_executions = 2
+
+  tracing_config {
+    mode = "Active"
+  }
 
   environment {
     variables = {
@@ -78,13 +124,13 @@ resource "aws_cloudwatch_event_rule" "ecr_push_rule" {
   name        = "ecr-push-rule-${var.environment}"
   description = "Trigger Lambda on ECR image push"
   event_pattern = jsonencode({
-    "source": ["aws.ecr"],
-    "detail-type": ["ECR Image Action"],
-    "detail": {
-      "action-type": ["PUSH"],
-      "result": ["SUCCESS"],
-      "repository-name": ["${var.app1_image}", "${var.app2_image}"],
-      "image-tag": ["${var.image_tag}"]
+    "source" : ["aws.ecr"],
+    "detail-type" : ["ECR Image Action"],
+    "detail" : {
+      "action-type" : ["PUSH"],
+      "result" : ["SUCCESS"],
+      "repository-name" : [var.app1_image, var.app2_image],
+      "image-tag" : [var.image_tag]
     }
   })
 }
@@ -103,5 +149,3 @@ resource "aws_lambda_permission" "allow_eventbridge" {
   principal     = "events.amazonaws.com"
   source_arn    = aws_cloudwatch_event_rule.ecr_push_rule.arn
 }
-
-data "aws_caller_identity" "current" {}

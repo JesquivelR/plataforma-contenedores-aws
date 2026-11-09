@@ -1,5 +1,10 @@
 resource "aws_ecs_cluster" "this" {
   name = "${var.environment}-ecs-cluster"
+
+  setting {
+    name  = "containerInsights"
+    value = "enabled"
+  }
 }
 
 resource "aws_ecs_task_definition" "app1" {
@@ -18,9 +23,10 @@ resource "aws_ecs_task_definition" "app1" {
 
   container_definitions = jsonencode([
     {
-      name      = var.app1_image
-      image     = "${var.repositorio_ecr}/${var.app1_image}:${var.image_tag}"
-      essential = true
+      name                   = var.app1_image
+      image                  = "${var.repositorio_ecr}/${var.app1_image}:${var.image_tag}"
+      essential              = true
+      readonlyRootFilesystem = true
       portMappings = [
         {
           name          = "${var.app1_image}-8000-tcp"
@@ -41,7 +47,7 @@ resource "aws_ecs_task_definition" "app1" {
         options = {
           "awslogs-group"         = "/ecs/${var.environment}-${var.app1_image}"
           "awslogs-region"        = var.aws_region
-          "awslogs-create-group"  = "true"  
+          "awslogs-create-group"  = "true"
           "awslogs-stream-prefix" = "ecs"
           "mode"                  = "non-blocking"
           "max-buffer-size"       = "25m"
@@ -59,8 +65,8 @@ resource "aws_ecs_service" "app1" {
   launch_type     = "FARGATE"
 
   network_configuration {
-    subnets         = var.subnets
-    security_groups = [var.security_group_id]
+    subnets          = var.subnets
+    security_groups  = [var.security_group_id]
     assign_public_ip = false
   }
 
@@ -88,8 +94,9 @@ resource "aws_ecs_task_definition" "app2" {
 
   container_definitions = jsonencode([
     {
-      name      = var.app2_image
-      image     = "${var.repositorio_ecr}/${var.app2_image}:${var.image_tag}"
+      name                   = var.app2_image
+      image                  = "${var.repositorio_ecr}/${var.app2_image}:${var.image_tag}"
+      readonlyRootFilesystem = true
       portMappings = [
         {
           name          = "${var.app2_image}-8000-tcp"
@@ -128,8 +135,8 @@ resource "aws_ecs_service" "app2" {
   launch_type     = "FARGATE"
 
   network_configuration {
-    subnets         = var.subnets
-    security_groups = [var.security_group_id]
+    subnets          = var.subnets
+    security_groups  = [var.security_group_id]
     assign_public_ip = false
   }
 

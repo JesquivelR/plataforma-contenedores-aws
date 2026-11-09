@@ -44,7 +44,10 @@ resource "aws_security_group" "alb_sg" {
   description = "Security group para ALB"
   vpc_id      = module.vpc.vpc_id
 
+  #checkov:skip=CKV_AWS_260:El laboratorio no tiene dominio ni certificado; el ALB publica HTTP en el puerto 80. Con un dominio propio se agrega un listener HTTPS y la redirección.
+
   ingress {
+    description = "HTTP publico hacia app1"
     from_port   = 80
     to_port     = 80
     protocol    = "tcp"
@@ -52,6 +55,7 @@ resource "aws_security_group" "alb_sg" {
   }
 
   ingress {
+    description = "HTTP publico hacia app2"
     from_port   = 8080
     to_port     = 8080
     protocol    = "tcp"
@@ -59,10 +63,11 @@ resource "aws_security_group" "alb_sg" {
   }
 
   egress {
-    from_port   = 0
-    to_port     = 0
-    protocol    = "-1"
-    cidr_blocks = ["0.0.0.0/0"]
+    description = "Trafico del ALB hacia las tareas de ECS dentro de la VPC"
+    from_port   = 8000
+    to_port     = 8000
+    protocol    = "tcp"
+    cidr_blocks = [var.vpc_cidr]
   }
 
   tags = {
@@ -76,6 +81,7 @@ resource "aws_security_group" "ecs_sg" {
   vpc_id      = module.vpc.vpc_id
 
   ingress {
+    description     = "Trafico desde el ALB al puerto de la aplicacion"
     from_port       = 8000
     to_port         = 8000
     protocol        = "tcp"
@@ -83,9 +89,10 @@ resource "aws_security_group" "ecs_sg" {
   }
 
   egress {
-    from_port   = 0
-    to_port     = 0
-    protocol    = "-1"
+    description = "HTTPS hacia ECR, CloudWatch Logs y las APIs de AWS por el NAT Gateway"
+    from_port   = 443
+    to_port     = 443
+    protocol    = "tcp"
     cidr_blocks = ["0.0.0.0/0"]
   }
 
@@ -95,18 +102,13 @@ resource "aws_security_group" "ecs_sg" {
 }
 
 module "updatedeploy" {
-  source         = "../../modules/updatedeploy"
-  environment    = var.environment
-  ecs_cluster    = module.ecs.ecs_cluster_id
-  aws_region     = var.aws_region
-  repositorio_ecr       = var.repositorio_ecr
-  app1_image            = var.app1_image
-  app2_image            = var.app2_image
-  image_tag             = var.image_tag
-  execution_role_arn    = module.iam.ecs_execution_role_arn
-  task_role_arn         = module.iam.ecs_task_role_arn
-  services_json  = jsonencode({
-    "app1" = var.app1_image,
-    "app2" = var.app2_image
-  })
+  source             = "../../modules/updatedeploy"
+  environment        = var.environment
+  ecs_cluster        = module.ecs.ecs_cluster_id
+  repositorio_ecr    = var.repositorio_ecr
+  app1_image         = var.app1_image
+  app2_image         = var.app2_image
+  image_tag          = var.image_tag
+  execution_role_arn = module.iam.ecs_execution_role_arn
+  task_role_arn      = module.iam.ecs_task_role_arn
 }
