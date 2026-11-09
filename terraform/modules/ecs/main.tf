@@ -1,5 +1,10 @@
 resource "aws_ecs_cluster" "this" {
   name = "${var.environment}-ecs-cluster"
+
+  setting {
+    name  = "containerInsights"
+    value = "enabled"
+  }
 }
 
 resource "aws_ecs_task_definition" "app1" {
@@ -18,9 +23,10 @@ resource "aws_ecs_task_definition" "app1" {
 
   container_definitions = jsonencode([
     {
-      name      = var.app1_image
-      image     = "${var.repositorio_ecr}/${var.app1_image}:${var.image_tag}"
-      essential = true
+      name                   = var.app1_image
+      image                  = "${var.repositorio_ecr}/${var.app1_image}:${var.image_tag}"
+      essential              = true
+      readonlyRootFilesystem = true
       portMappings = [
         {
           name          = "${var.app1_image}-8000-tcp"
@@ -88,8 +94,9 @@ resource "aws_ecs_task_definition" "app2" {
 
   container_definitions = jsonencode([
     {
-      name  = var.app2_image
-      image = "${var.repositorio_ecr}/${var.app2_image}:${var.image_tag}"
+      name                   = var.app2_image
+      image                  = "${var.repositorio_ecr}/${var.app2_image}:${var.image_tag}"
+      readonlyRootFilesystem = true
       portMappings = [
         {
           name          = "${var.app2_image}-8000-tcp"

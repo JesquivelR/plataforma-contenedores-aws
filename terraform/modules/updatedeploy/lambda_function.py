@@ -37,6 +37,8 @@ def lambda_handler(event, context):
             container_definition = {
                 'name': app_name,
                 'image': image_uri,
+                'essential': True,
+                'readonlyRootFilesystem': True,
                 'portMappings': [
                     {
                         'containerPort': 8000,

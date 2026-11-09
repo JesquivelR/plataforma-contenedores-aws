@@ -30,19 +30,49 @@ resource "aws_iam_policy" "ecs_permissions" {
     Version = "2012-10-17",
     Statement = [
       {
-        Effect = "Allow",
-        Action = [
-          "ecs:RegisterTaskDefinition",
-          "ecs:UpdateService",
-          "ecs:DescribeServices",
-          "ecs:DescribeClusters",
-          "ecs:ListServices",
-          "iam:PassRole"
-        ],
+        Sid      = "LeerYActualizarServiciosDelCluster"
+        Effect   = "Allow",
+        Action   = ["ecs:UpdateService", "ecs:DescribeServices"],
+        Resource = ["${replace(var.ecs_cluster, ":cluster/", ":service/")}/*"]
+      },
+      {
+        Sid      = "LeerElCluster"
+        Effect   = "Allow",
+        Action   = ["ecs:DescribeClusters"],
+        Resource = [var.ecs_cluster]
+      },
+      {
+        Sid      = "ListarServiciosDelCluster"
+        Effect   = "Allow",
+        Action   = ["ecs:ListServices"],
+        Resource = ["*"],
+        Condition = {
+          ArnEquals = { "ecs:cluster" = var.ecs_cluster }
+        }
+      },
+      {
+        # RegisterTaskDefinition no admite permisos a nivel de recurso.
+        Sid      = "RegistrarTaskDefinitions"
+        Effect   = "Allow",
+        Action   = ["ecs:RegisterTaskDefinition"],
         Resource = ["*"]
+      },
+      {
+        Sid      = "PasarSoloLosRolesDeLasTareas"
+        Effect   = "Allow",
+        Action   = ["iam:PassRole"],
+        Resource = [var.execution_role_arn, var.task_role_arn],
+        Condition = {
+          StringEquals = { "iam:PassedToService" = "ecs-tasks.amazonaws.com" }
+        }
       }
     ]
   })
+}
+
+resource "aws_iam_role_policy_attachment" "xray_policy_attachment" {
+  role       = aws_iam_role.lambda_role.name
+  policy_arn = "arn:aws:iam::aws:policy/AWSXRayDaemonWriteAccess"
 }
 
 resource "aws_iam_role_policy_attachment" "ecs_policy_attachment" {
@@ -57,13 +87,23 @@ data "archive_file" "lambda" {
 }
 
 resource "aws_lambda_function" "update_deploy_lambda" {
+  #checkov:skip=CKV_AWS_116:EventBridge reintenta la invocación; una DLQ en SQS queda fuera del alcance del laboratorio.
+  #checkov:skip=CKV_AWS_117:La función solo llama a la API de ECS; ponerla en la VPC exigiría endpoints o NAT sin mejorar el aislamiento.
+  #checkov:skip=CKV_AWS_173:Las variables de entorno no contienen secretos, solo nombres y ARN; se cifran con la llave administrada por AWS.
+  #checkov:skip=CKV_AWS_272:El código se despliega desde este repositorio con Terraform; la firma de código con AWS Signer queda fuera del laboratorio.
   function_name = "update-deploy-${var.environment}"
   role          = aws_iam_role.lambda_role.arn
   handler       = "lambda_function.lambda_handler"
-  runtime       = "python3.9"
+  runtime       = "python3.12"
 
   filename         = data.archive_file.lambda.output_path
   source_code_hash = data.archive_file.lambda.output_base64sha256
+
+  reserved_concurrent_executions = 2
+
+  tracing_config {
+    mode = "Active"
+  }
 
   environment {
     variables = {
